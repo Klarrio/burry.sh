@@ -54,6 +54,7 @@ type S3Config struct {
 	SecretAccessKey string
 	Bucket          string
 	Prefix          string
+	Object          string
 	SSL             bool
 }
 
@@ -98,6 +99,9 @@ func extractS3config() (s3Config S3Config) {
 		}
 		if p.Key == "PREFIX" {
 			s3Config.Prefix = p.Value
+		}
+		if p.Key == "OBJECT" {
+			s3Config.Object = p.Value
 		}
 		if p.Key == "SSL" {
 			var err error

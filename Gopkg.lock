@@ -40,6 +40,14 @@
   version = "v1.38.1"
 
 [[projects]]
+  digest = "1:883e2fdbdd0e577187bd8106fec775b1176059af267a7f40eba5308955c67d52"
+  name = "github.com/gorilla/mux"
+  packages = ["."]
+  pruneopts = ""
+  revision = "00bdffe0f3c77e27d2cf6f5c70232a2d3e4d9c15"
+  version = "v1.7.3"
+
+[[projects]]
   digest = "1:e7224669901bab4094e6d6697c136557b7177db6ceb01b7fc8b20d08f4b5aacd"
   name = "github.com/hashicorp/consul"
   packages = ["api"]
@@ -206,8 +214,10 @@
   analyzer-version = 1
   input-imports = [
     "github.com/coreos/etcd/client",
+    "github.com/gorilla/mux",
     "github.com/hashicorp/consul/api",
     "github.com/minio/minio-go",
+    "github.com/minio/minio-go/pkg/credentials",
     "github.com/ogier/pflag",
     "github.com/pierrre/archivefile/zip",
     "github.com/samuel/go-zookeeper/zk",

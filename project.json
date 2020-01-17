@@ -1,0 +1,5 @@
+{
+  "type": "go",
+  "dockerRepository": "klarrio-docker.jfrog.io/klarrio/burry",
+  "version": "0.4.1"
+}

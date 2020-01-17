@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	etcd "github.com/coreos/etcd/client"
 	consul "github.com/hashicorp/consul/api"
 	flag "github.com/ogier/pflag"
 	"github.com/samuel/go-zookeeper/zk"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -20,6 +20,7 @@ const (
 	BURRYMETA_FILE          string = ".burrymeta"
 	CONTENT_FILE            string = "content"
 	BURRY_OPERATION_BACKUP  string = "backup"
+	BURRY_OPERATION_DAEMON  string = "daemon"
 	BURRY_OPERATION_RESTORE string = "restore"
 	INFRA_SERVICE_ETCD      string = "etcd"
 	INFRA_SERVICE_ZK        string = "zk"
@@ -37,13 +38,13 @@ var (
 	createburryfest bool
 	// the operation burry should to carry out:
 	bop  string
-	bops = [...]string{BURRY_OPERATION_BACKUP, BURRY_OPERATION_RESTORE}
+	bops = [...]string{BURRY_OPERATION_BACKUP, BURRY_OPERATION_RESTORE, BURRY_OPERATION_DAEMON}
 	// the type of infra service to back up or restore:
 	isvc  string
 	isvcs = [...]string{INFRA_SERVICE_ZK, INFRA_SERVICE_ETCD, INFRA_SERVICE_CONSUL}
 	// the infra service endpoint to use:
 	endpoint string
-  timeout  int
+	timeout  int
 	zkconn   *zk.Conn
 	kapi     etcd.KeysAPI
 	ckv      *consul.KV
@@ -94,17 +95,17 @@ func init() {
 	flag.Parse()
 
 	switch log_level := os.Getenv("LOG_LEVEL"); log_level {
-  case "DEBUG":
+	case "DEBUG":
 		log.SetLevel(log.DebugLevel)
-  case "WARN":
+	case "WARN":
 		log.SetLevel(log.WarnLevel)
-  case "ERROR":
+	case "ERROR":
 		log.SetLevel(log.ErrorLevel)
-  case "FATAL":
+	case "FATAL":
 		log.SetLevel(log.FatalLevel)
-  case "PANIC":
+	case "PANIC":
 		log.SetLevel(log.PanicLevel)
-  default:
+	default:
 		log.SetLevel(log.InfoLevel)
 	}
 
@@ -126,6 +127,30 @@ func init() {
 	numrestored = 0
 }
 
+func daemon() {
+	startRestAPI()
+	
+	log.WithFields(log.Fields{"func": "daemon"}).Infof("Starting daemon mode with Config: %+v", brf)
+
+	success := false
+	for {
+		switch brf.InfraService {
+		case INFRA_SERVICE_ZK:
+			success = backupZK()
+		case INFRA_SERVICE_ETCD:
+			success = backupETCD()
+		case INFRA_SERVICE_CONSUL:
+			success = backupCONSUL()
+		default:
+			log.WithFields(log.Fields{"func": "daemon"}).Fatal(fmt.Sprintf("Infra service %s unknown or not yet supported", brf.InfraService))
+		}
+		if !success {
+			log.WithFields(log.Fields{"func": "daemon"}).Fatal("Backup was not successfull!")
+		}
+		time.Sleep(10 * time.Second)
+	}
+}
+
 func processop() bool {
 	success := false
 	// validate available operations parameter:
@@ -134,6 +159,8 @@ func processop() bool {
 		return false
 	}
 	switch bop {
+	case BURRY_OPERATION_DAEMON:
+		daemon()
 	case BURRY_OPERATION_BACKUP:
 		switch brf.InfraService {
 		case INFRA_SERVICE_ZK:
