@@ -129,7 +129,7 @@ func init() {
 
 func daemon() {
 	startRestAPI()
-	
+
 	log.WithFields(log.Fields{"func": "daemon"}).Infof("Starting daemon mode with Config: %+v", brf)
 
 	success := false
@@ -147,7 +147,8 @@ func daemon() {
 		if !success {
 			log.WithFields(log.Fields{"func": "daemon"}).Fatal("Backup was not successfull!")
 		}
-		time.Sleep(10 * time.Second)
+		log.WithFields(log.Fields{"func": "daemon"}).Debug("Sleeping")
+		time.Sleep(1 * time.Hour)
 	}
 }
 

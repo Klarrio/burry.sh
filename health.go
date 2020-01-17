@@ -10,7 +10,9 @@ func startRestAPI() {
 	router := mux.NewRouter()
 	router.Methods("GET").Path("/health").HandlerFunc(getHealth)
 	router.Use(errorLogger)
-	log.Fatal(http.ListenAndServe(":9000", router))
+	go func() {
+		log.Fatal(http.ListenAndServe(":9000", router))
+   }()
 }
 
 func getHealth(w http.ResponseWriter, r *http.Request) {

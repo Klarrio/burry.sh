@@ -18,6 +18,7 @@ func backupZK() bool {
 	}
 	zks := []string{brf.Endpoint}
 	zkconn, _, _ = zk.Connect(zks, time.Duration(brf.Timeout) * time.Second)
+
 	// use the ZK API to visit each node and store
 	// the values in the local filesystem:
 	visitZK("/", reapsimple)
