@@ -16,7 +16,7 @@ func backupZK() bool {
 	if brf.Endpoint == "" {
 		return false
 	}
-	zks := []string{brf.Endpoint}
+	zks := strings.Split(brf.Endpoint, ",")
 	zkconn, _, _ = zk.Connect(zks, time.Duration(brf.Timeout) * time.Second)
 
 	// use the ZK API to visit each node and store
@@ -72,7 +72,7 @@ func restoreZK() bool {
 		defer func() {
 			_ = os.RemoveAll(s)
 		}()
-		zks := []string{brf.Endpoint}
+		zks := strings.Split(brf.Endpoint, ",")
 		zkconn, _, _ = zk.Connect(zks, time.Duration(brf.Timeout) * time.Second)
 		zkconn.SetLogger(log.StandardLogger())
 		// walk the snapshot directory and use the ZK API to
