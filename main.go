@@ -219,7 +219,7 @@ func main() {
 		os.Exit(0)
 	}
 	log.WithFields(log.Fields{"func": "main"}).Info(fmt.Sprintf("Selected operation: %s", strings.ToUpper(bop)))
-	log.WithFields(log.Fields{"func": "main"}).Debug(fmt.Sprintf("My config: %+v", brf))
+	log.WithFields(log.Fields{"func": "main"}).Info(fmt.Sprintf("My config: %+v", brf))
 
 	if ok := processop(); ok {
 		if createburryfest {

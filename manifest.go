@@ -39,6 +39,13 @@ type CredParams struct {
 	Value string `json:"val"`
 }
 
+func (p CredParams) String() string {
+	if strings.Contains(strings.ToUpper(p.Key), "SECRET") {
+		return fmt.Sprintf("{Key:%s Value:*****}", p.Key)
+	}
+	return fmt.Sprintf("{Key:%s Value:%s}", p.Key, p.Value)
+}
+
 // ArchMeta defines the top-level structure for the
 // metadata file in the archive.
 type ArchMeta struct {

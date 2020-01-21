@@ -62,7 +62,7 @@ func store(path string, val string) {
 	cwd, _ := os.Getwd()
 	fpath := ""
 	if path == "/" {
-		log.WithFields(log.Fields{"func": "store"}).Info(fmt.Sprintf("Rewriting root"))
+		log.WithFields(log.Fields{"func": "store"}).Debug(fmt.Sprintf("Rewriting root"))
 		fpath, _ = filepath.Abs(filepath.Join(cwd, based))
 	} else {
 		// escape ":" in the path so that we have no issues storing it in the filesystem:
