@@ -67,6 +67,12 @@ var (
 	numrestored int
 	// Forget existing data
 	forget bool
+	// Poll time in seconds
+	polltime int
+	// MD5 checksum of the previous run (only in daemon mode)
+	checksum []byte
+	// blacklist
+	blacklist []string
 )
 
 // reap function types take a node path
@@ -86,6 +92,9 @@ func init() {
 	flag.StringVarP(&cred, "credentials", "c", "", fmt.Sprintf("The credentials to use in format STORAGE_TARGET_ENDPOINT,KEY1=VAL1,...KEYn=VALn.\n\tExample: s3.amazonaws.com,ACCESS_KEY_ID=...,SECRET_ACCESS_KEY=...,BUCKET=...,PREFIX=...,SSL=..."))
 	flag.StringVarP(&snapshotid, "snapshot", "s", "", fmt.Sprintf("The ID of the snapshot.\n\tExample: 1483193387"))
 	flag.BoolVarP(&forget, "forget", "f", true, fmt.Sprintf("Forget existing data "))
+	flag.IntVarP(&polltime, "polltime", "p", 60*60 , fmt.Sprintf("The poll time (seconds) in daemon operation mode, by default 1h (3600 seconds)"))
+	var bl string
+	flag.StringVarP(&bl, "blacklist", "l", "", fmt.Sprint("The comma-separated list of tree nodes to skip\n\tExample -l \"/zookeeper,/kafka\""))
 
 	flag.Usage = func() {
 		fmt.Printf("Usage: burry [args]\n\n")
@@ -93,6 +102,8 @@ func init() {
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+
+	blacklist = strings.Split(bl, ",")
 
 	switch log_level := os.Getenv("LOG_LEVEL"); log_level {
 	case "DEBUG":
@@ -110,7 +121,7 @@ func init() {
 	}
 
 	if bfpath, mbrf, err := loadbf(); err != nil {
-		brf = Burryfest{InfraService: isvc, Endpoint: endpoint, Timeout: timeout, StorageTarget: starget, Creds: parsecred()}
+		brf = Burryfest{InfraService: isvc, Endpoint: endpoint, Timeout: timeout, StorageTarget: starget, Creds: parsecred(), Polltime: polltime, Blacklist: blacklist}
 	} else {
 		brf = mbrf
 		log.WithFields(log.Fields{"func": "init"}).Info(fmt.Sprintf("Using burryfest %s", bfpath))
@@ -125,15 +136,17 @@ func init() {
 		}
 	}
 	numrestored = 0
+	checksum = []byte{0x00}
 }
 
 func daemon() {
-	startRestAPI()
-
 	log.WithFields(log.Fields{"func": "daemon"}).Infof("Starting daemon mode with Config: %+v", brf)
+
+	startRestAPI()
 
 	success := false
 	for {
+		based = strconv.FormatInt(time.Now().Unix(), 10)
 		switch brf.InfraService {
 		case INFRA_SERVICE_ZK:
 			success = backupZK()
@@ -147,8 +160,8 @@ func daemon() {
 		if !success {
 			log.WithFields(log.Fields{"func": "daemon"}).Fatal("Backup was not successfull!")
 		}
-		log.WithFields(log.Fields{"func": "daemon"}).Debug("Sleeping")
-		time.Sleep(1 * time.Hour)
+		log.WithFields(log.Fields{"func": "daemon"}).Debugf("Sleeping %d seconds", polltime)
+		time.Sleep(time.Duration(polltime) * time.Second)
 	}
 }
 

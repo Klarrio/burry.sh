@@ -21,6 +21,8 @@ type Burryfest struct {
 	Timeout       int         `json:"timeout"`
 	StorageTarget string      `json:"target"`
 	Creds         Credentials `json:"credentials"`
+	Polltime      int         `json:"polltime"`
+	Blacklist     []string    `json:"blacklist"`
 }
 
 // Credentials defines the structure of the access

@@ -23,10 +23,16 @@ func backupZK() bool {
 	// the values in the local filesystem:
 	visitZK("/", reapsimple)
 	if lookupst(brf.StorageTarget) > 0 { // non-TTY, actual storage
-		// create an archive file of the node's values:
-		a := arch()
-		// transfer to remote, if applicable:
-		toremote(a)
+		if hasArchiveChanged() {
+			log.WithFields(log.Fields{"func": "backupZK"}).Infof("MD5 hash changed, storing backup")
+			// create an archive file of the node's values:
+			a := arch()
+			// transfer to remote, if applicable:
+			toremote(a)
+		} else {
+			log.WithFields(log.Fields{"func": "backupZK"}).Debugf("MD5 hash not changed, skipping storing backup")
+			os.RemoveAll(based)
+		}
 	}
 	return true
 }
