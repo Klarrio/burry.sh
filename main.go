@@ -15,22 +15,22 @@ import (
 )
 
 const (
-	VERSION                 string = "0.4.0"
-	BURRYFEST_FILE          string = ".burryfest"
-	BURRYMETA_FILE          string = ".burrymeta"
-	CONTENT_FILE            string = "content"
-	BURRY_OPERATION_BACKUP  string = "backup"
-	BURRY_OPERATION_DAEMON  string = "daemon"
-	BURRY_OPERATION_RESTORE string = "restore"
-	INFRA_SERVICE_ETCD      string = "etcd"
-	INFRA_SERVICE_ZK        string = "zk"
-	INFRA_SERVICE_CONSUL    string = "consul"
-	STORAGE_TARGET_TTY      string = "tty"
-	STORAGE_TARGET_LOCAL    string = "local"
-	STORAGE_TARGET_S3       string = "s3"
-	STORAGE_TARGET_MINIO    string = "minio"
-	REMOTE_ARCH_FILE        string = "latest.zip"
-	REMOTE_ARCH_TYPE        string = "application/zip"
+	VERSION                    string = "0.4.0"
+	BURRYFEST_FILE             string = ".burryfest"
+	BURRYMETA_FILE             string = ".burrymeta"
+	CONTENT_FILE               string = "content"
+	BURRY_OPERATION_BACKUP     string = "backup"
+	BURRY_OPERATION_CONTINUOUS string = "continuous"
+	BURRY_OPERATION_RESTORE    string = "restore"
+	INFRA_SERVICE_ETCD         string = "etcd"
+	INFRA_SERVICE_ZK           string = "zk"
+	INFRA_SERVICE_CONSUL       string = "consul"
+	STORAGE_TARGET_TTY         string = "tty"
+	STORAGE_TARGET_LOCAL       string = "local"
+	STORAGE_TARGET_S3          string = "s3"
+	STORAGE_TARGET_MINIO       string = "minio"
+	REMOTE_ARCH_FILE           string = "latest.zip"
+	REMOTE_ARCH_TYPE           string = "application/zip"
 )
 
 var (
@@ -38,7 +38,7 @@ var (
 	createburryfest bool
 	// the operation burry should to carry out:
 	bop  string
-	bops = [...]string{BURRY_OPERATION_BACKUP, BURRY_OPERATION_RESTORE, BURRY_OPERATION_DAEMON}
+	bops = [...]string{BURRY_OPERATION_BACKUP, BURRY_OPERATION_RESTORE, BURRY_OPERATION_CONTINUOUS}
 	// the type of infra service to back up or restore:
 	isvc  string
 	isvcs = [...]string{INFRA_SERVICE_ZK, INFRA_SERVICE_ETCD, INFRA_SERVICE_CONSUL}
@@ -69,7 +69,7 @@ var (
 	forget bool
 	// Poll time in seconds
 	polltime int
-	// MD5 checksum of the previous run (only in daemon mode)
+	// MD5 checksum of the previous run (only in continuous mode)
 	checksum []byte
 	// blacklist
 	blacklist []string
@@ -92,7 +92,7 @@ func init() {
 	flag.StringVarP(&cred, "credentials", "c", "", fmt.Sprintf("The credentials to use in format STORAGE_TARGET_ENDPOINT,KEY1=VAL1,...KEYn=VALn.\n\tExample: s3.amazonaws.com,ACCESS_KEY_ID=...,SECRET_ACCESS_KEY=...,BUCKET=...,PREFIX=...,SSL=..."))
 	flag.StringVarP(&snapshotid, "snapshot", "s", "", fmt.Sprintf("The ID of the snapshot.\n\tExample: 1483193387"))
 	flag.BoolVarP(&forget, "forget", "f", true, fmt.Sprintf("Forget existing data "))
-	flag.IntVarP(&polltime, "polltime", "p", 60*60 , fmt.Sprintf("The poll time (seconds) in daemon operation mode, by default 1h (3600 seconds)"))
+	flag.IntVarP(&polltime, "polltime", "p", 60*60, fmt.Sprintf("The poll time (seconds) in continuous operation mode, by default 1h (3600 seconds)"))
 	var bl string
 	flag.StringVarP(&bl, "blacklist", "l", "", fmt.Sprint("The comma-separated list of tree nodes to skip\n\tExample -l \"/zookeeper,/kafka\""))
 
@@ -139,8 +139,8 @@ func init() {
 	checksum = []byte{0x00}
 }
 
-func daemon() {
-	log.WithFields(log.Fields{"func": "daemon"}).Infof("Starting daemon mode with Config: %+v", brf)
+func continuous() {
+	log.WithFields(log.Fields{"func": "continuous"}).Infof("Starting continuous mode with Config: %+v", brf)
 
 	startRestAPI()
 
@@ -155,12 +155,12 @@ func daemon() {
 		case INFRA_SERVICE_CONSUL:
 			success = backupCONSUL()
 		default:
-			log.WithFields(log.Fields{"func": "daemon"}).Fatal(fmt.Sprintf("Infra service %s unknown or not yet supported", brf.InfraService))
+			log.WithFields(log.Fields{"func": "continuous"}).Fatal(fmt.Sprintf("Infra service %s unknown or not yet supported", brf.InfraService))
 		}
 		if !success {
-			log.WithFields(log.Fields{"func": "daemon"}).Fatal("Backup was not successfull!")
+			log.WithFields(log.Fields{"func": "continuous"}).Fatal("Backup was not successfull!")
 		}
-		log.WithFields(log.Fields{"func": "daemon"}).Debugf("Sleeping %d seconds", polltime)
+		log.WithFields(log.Fields{"func": "continuous"}).Debugf("Sleeping %d seconds", polltime)
 		time.Sleep(time.Duration(polltime) * time.Second)
 	}
 }
@@ -173,8 +173,8 @@ func processop() bool {
 		return false
 	}
 	switch bop {
-	case BURRY_OPERATION_DAEMON:
-		daemon()
+	case BURRY_OPERATION_CONTINUOUS:
+		continuous()
 	case BURRY_OPERATION_BACKUP:
 		switch brf.InfraService {
 		case INFRA_SERVICE_ZK:

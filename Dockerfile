@@ -6,5 +6,5 @@ RUN apk --update upgrade && apk add ca-certificates && apk add libc6-compat && \
 RUN apk add --no-cache tini
 ENTRYPOINT ["/sbin/tini", "--"]
 USER dsh
-ADD burry.sh daemon.sh /app/
-CMD ["/app/daemon.sh"]
+ADD burry.sh continuous.sh /app/
+CMD ["/app/continuous.sh"]
