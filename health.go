@@ -11,7 +11,7 @@ func startRestAPI() {
 	router.Methods("GET").Path("/health").HandlerFunc(getHealth)
 	router.Use(errorLogger)
 	go func() {
-		log.Fatal(http.ListenAndServe(":9000", router))
+		log.Fatal(http.ListenAndServe(":7070", router))
    }()
 }
 
