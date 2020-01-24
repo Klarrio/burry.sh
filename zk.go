@@ -95,7 +95,7 @@ func restoreZK() bool {
 }
 
 func visitZKReverse(path string, f os.FileInfo, err error) error {
-	if f.Name() == BURRYMETA_FILE || f.Name() == snapshotid {
+	if f == nil || f.Name() == BURRYMETA_FILE || f.Name() == snapshotid {
 		return nil
 	} else {
 		cwd, _ := os.Getwd()
