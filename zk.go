@@ -17,12 +17,17 @@ func backupZK() bool {
 		return false
 	}
 	zks := strings.Split(brf.Endpoint, ",")
-	zkconn, _, _ = zk.Connect(zks, time.Duration(brf.Timeout) * time.Second)
+	var err error
+	zkconn, _, err = zk.Connect(zks, time.Duration(brf.Timeout) * time.Second)
+	if err != nil {
+		log.WithFields(log.Fields{"func": "backupZK"}).Errorf("Could not connect to zookeeper (%v)", err)
+		return false
+	}
 
 	// use the ZK API to visit each node and store
 	// the values in the local filesystem:
-	visitZK("/", reapsimple)
-	if lookupst(brf.StorageTarget) > 0 { // non-TTY, actual storage
+	rv := visitZK("/", reapsimple)
+	if rv && lookupst(brf.StorageTarget) > 0 { // non-TTY, actual storage
 		if hasArchiveChanged() {
 			log.WithFields(log.Fields{"func": "backupZK"}).Infof("MD5 hash changed, storing backup")
 			// create an archive file of the node's values:
@@ -34,22 +39,24 @@ func backupZK() bool {
 			os.RemoveAll(based)
 		}
 	}
-	return true
+	return rv
 }
 
 // visitZK visits a path in the ZooKeeper tree
 // and applies the reap function fn on the node
 // at the path if it is a leaf node
-func visitZK(path string, fn reap) {
+func visitZK(path string, fn reap) bool {
+	rv := true
 	log.WithFields(log.Fields{"func": "visitZK"}).Debug(fmt.Sprintf("On node %s", path))
 	if children, _, err := zkconn.Children(path); err != nil {
-		log.WithFields(log.Fields{"func": "visitZK"}).Error(fmt.Sprintf("%s", err))
-		return
+		log.WithFields(log.Fields{"func": "visitZK"}).Errorf("zkconn.Children(%s) error: %v", path, err)
+		return false
 	} else {
 		log.WithFields(log.Fields{"func": "visitZK"}).Debug(fmt.Sprintf("%s has %d children", path, len(children)))
 
 		if val, _, err := zkconn.Get(path); err != nil {
-			log.WithFields(log.Fields{"func": "visitZK"}).Error(fmt.Sprintf("%s", err))
+			log.WithFields(log.Fields{"func": "visitZK"}).Errorf("zkconn.Get(%s) error: %v", path, err)
+			return false
 		} else {
 			fn(path, string(val))
 		}
@@ -63,10 +70,11 @@ func visitZK(path string, fn reap) {
 					newpath = strings.Join([]string{path, c}, "/")
 				}
 				log.WithFields(log.Fields{"func": "visitZK"}).Debug(fmt.Sprintf("Next visiting child %s", newpath))
-				visitZK(newpath, fn)
+				rv = rv && visitZK(newpath, fn)
 			}
 		}
 	}
+	return rv
 }
 
 func restoreZK() bool {

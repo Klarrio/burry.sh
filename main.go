@@ -96,6 +96,7 @@ func init() {
 	var bl string
 	flag.StringVarP(&bl, "blacklist", "l", "", fmt.Sprint("The comma-separated list of tree nodes to skip\n\tExample -l \"/zookeeper,/kafka\""))
 
+
 	flag.Usage = func() {
 		fmt.Printf("Usage: burry [args]\n\n")
 		fmt.Println("Arguments:")
@@ -150,6 +151,7 @@ func processop() bool {
 	switch bop {
 	case BURRY_OPERATION_CONTINUOUS:
 		continuous()
+		success = true
 	case BURRY_OPERATION_BACKUP:
 		switch brf.InfraService {
 		case INFRA_SERVICE_ZK:
