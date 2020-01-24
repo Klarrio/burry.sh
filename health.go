@@ -1,24 +1,40 @@
 package main
 
 import (
-	"net/http"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
+	"net/http"
+	"time"
 )
 
+var lastTrigger int64
+
 func startRestAPI() {
+	lastTrigger = time.Now().Unix()
 	router := mux.NewRouter()
 	router.Methods("GET").Path("/health").HandlerFunc(getHealth)
 	router.Use(errorLogger)
 	go func() {
 		log.Fatal(http.ListenAndServe(":7070", router))
-   }()
+	}()
+}
+
+func triggerHealth() {
+	lastTrigger = time.Now().Unix()
+}
+
+func ishealthy() bool {
+	return time.Now().Unix()-lastTrigger < int64(brf.Polltime*2)
 }
 
 func getHealth(w http.ResponseWriter, r *http.Request) {
 	logger := log.WithField("action", "get health")
-	if _, err := w.Write([]byte("All is well")); err != nil {
-		logger.WithError(err).Error("could not write HTTP response")
+	if ishealthy() {
+		if _, err := w.Write([]byte("All is well")); err != nil {
+			logger.WithError(err).Error("could not write HTTP response")
+		}
+	} else {
+		http.Error(w, "Last trigger was too long ago", http.StatusInternalServerError)
 	}
 }
 
@@ -60,4 +76,3 @@ func errorLogger(next http.Handler) http.Handler {
 		}
 	})
 }
-
