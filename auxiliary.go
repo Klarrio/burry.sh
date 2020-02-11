@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	azip "github.com/pierrre/archivefile/zip"
+	log "github.com/sirupsen/logrus"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -35,6 +38,12 @@ func lookupst(name string) int {
 // note that the actual processing is
 // determined by the storage target
 func reapsimple(path string, val string) {
+	for _, prefix := range blacklist {
+		if len(prefix) > 0 && strings.HasPrefix(path, prefix) {
+			log.WithFields(log.Fields{"func": "reapsimple"}).Debugf("Skipping blacklisted %s (prefix: %s)", path, prefix)
+			return
+		}
+	}
 	stidx := lookupst(brf.StorageTarget)
 	switch {
 	case stidx == 0: // TTY
@@ -53,7 +62,7 @@ func store(path string, val string) {
 	cwd, _ := os.Getwd()
 	fpath := ""
 	if path == "/" {
-		log.WithFields(log.Fields{"func": "store"}).Info(fmt.Sprintf("Rewriting root"))
+		log.WithFields(log.Fields{"func": "store"}).Debug(fmt.Sprintf("Rewriting root"))
 		fpath, _ = filepath.Abs(filepath.Join(cwd, based))
 	} else {
 		// escape ":" in the path so that we have no issues storing it in the filesystem:
@@ -128,4 +137,48 @@ func readc(path string) ([]byte, error) {
 			return c, nil
 		}
 	}
+}
+
+// MD5All reads all the files in the file tree rooted at root and returns
+// from file path to the MD5 sum of the file's contents.  If the directory walk
+// fails or any read operation fails, MD5All returns an error.
+func MD5All(root string) ([]byte, error) {
+	h := md5.New()
+
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		// add names to the hash as well, but remove the root
+		io.WriteString(h, strings.TrimPrefix(path, root))
+
+		if info.Mode().IsRegular() {
+			f, err := os.Open(path)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer f.Close()
+			if _, err := io.Copy(h, f); err != nil {
+				log.Fatal(err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return []byte{0x00}, err
+	}
+	return h.Sum(nil), nil
+}
+
+func hasArchiveChanged() bool {
+	cwd, _ := os.Getwd()
+	ipath := filepath.Join(cwd, based, "/")
+	md5, err := MD5All(ipath)
+	if err != nil {
+		log.WithFields(log.Fields{"func": "hasArchiveChanged"}).Fatalf("Could not calculate MD5 hash of %s (%v)", ipath, err)
+	}
+	log.WithFields(log.Fields{"func": "hasArchiveChanged"}).Debugf("Old checksum: %x, new checksum: %x", checksum, md5)
+	result := !bytes.Equal(md5, checksum)
+	checksum = md5
+	return result
 }

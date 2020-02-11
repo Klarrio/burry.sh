@@ -7,29 +7,30 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	etcd "github.com/coreos/etcd/client"
 	consul "github.com/hashicorp/consul/api"
 	flag "github.com/ogier/pflag"
 	"github.com/samuel/go-zookeeper/zk"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
-	VERSION                 string = "0.4.0"
-	BURRYFEST_FILE          string = ".burryfest"
-	BURRYMETA_FILE          string = ".burrymeta"
-	CONTENT_FILE            string = "content"
-	BURRY_OPERATION_BACKUP  string = "backup"
-	BURRY_OPERATION_RESTORE string = "restore"
-	INFRA_SERVICE_ETCD      string = "etcd"
-	INFRA_SERVICE_ZK        string = "zk"
-	INFRA_SERVICE_CONSUL    string = "consul"
-	STORAGE_TARGET_TTY      string = "tty"
-	STORAGE_TARGET_LOCAL    string = "local"
-	STORAGE_TARGET_S3       string = "s3"
-	STORAGE_TARGET_MINIO    string = "minio"
-	REMOTE_ARCH_FILE        string = "latest.zip"
-	REMOTE_ARCH_TYPE        string = "application/zip"
+	VERSION                    string = "0.4.0"
+	BURRYFEST_FILE             string = ".burryfest"
+	BURRYMETA_FILE             string = ".burrymeta"
+	CONTENT_FILE               string = "content"
+	BURRY_OPERATION_BACKUP     string = "backup"
+	BURRY_OPERATION_CONTINUOUS string = "continuous"
+	BURRY_OPERATION_RESTORE    string = "restore"
+	INFRA_SERVICE_ETCD         string = "etcd"
+	INFRA_SERVICE_ZK           string = "zk"
+	INFRA_SERVICE_CONSUL       string = "consul"
+	STORAGE_TARGET_TTY         string = "tty"
+	STORAGE_TARGET_LOCAL       string = "local"
+	STORAGE_TARGET_S3          string = "s3"
+	STORAGE_TARGET_MINIO       string = "minio"
+	REMOTE_ARCH_FILE           string = "latest.zip"
+	REMOTE_ARCH_TYPE           string = "application/zip"
 )
 
 var (
@@ -37,13 +38,13 @@ var (
 	createburryfest bool
 	// the operation burry should to carry out:
 	bop  string
-	bops = [...]string{BURRY_OPERATION_BACKUP, BURRY_OPERATION_RESTORE}
+	bops = [...]string{BURRY_OPERATION_BACKUP, BURRY_OPERATION_RESTORE, BURRY_OPERATION_CONTINUOUS}
 	// the type of infra service to back up or restore:
 	isvc  string
 	isvcs = [...]string{INFRA_SERVICE_ZK, INFRA_SERVICE_ETCD, INFRA_SERVICE_CONSUL}
 	// the infra service endpoint to use:
 	endpoint string
-  timeout  int
+	timeout  int
 	zkconn   *zk.Conn
 	kapi     etcd.KeysAPI
 	ckv      *consul.KV
@@ -66,6 +67,12 @@ var (
 	numrestored int
 	// Forget existing data
 	forget bool
+	// Poll time in seconds
+	polltime int
+	// MD5 checksum of the previous run (only in continuous mode)
+	checksum []byte
+	// blacklist
+	blacklist []string
 )
 
 // reap function types take a node path
@@ -85,6 +92,10 @@ func init() {
 	flag.StringVarP(&cred, "credentials", "c", "", fmt.Sprintf("The credentials to use in format STORAGE_TARGET_ENDPOINT,KEY1=VAL1,...KEYn=VALn.\n\tExample: s3.amazonaws.com,ACCESS_KEY_ID=...,SECRET_ACCESS_KEY=...,BUCKET=...,PREFIX=...,SSL=..."))
 	flag.StringVarP(&snapshotid, "snapshot", "s", "", fmt.Sprintf("The ID of the snapshot.\n\tExample: 1483193387"))
 	flag.BoolVarP(&forget, "forget", "f", true, fmt.Sprintf("Forget existing data "))
+	flag.IntVarP(&polltime, "polltime", "p", 60*60, fmt.Sprintf("The poll time (seconds) in continuous operation mode, by default 1h (3600 seconds)"))
+	var bl string
+	flag.StringVarP(&bl, "blacklist", "l", "", fmt.Sprint("The comma-separated list of tree nodes to skip\n\tExample -l \"/zookeeper,/kafka\""))
+
 
 	flag.Usage = func() {
 		fmt.Printf("Usage: burry [args]\n\n")
@@ -93,23 +104,25 @@ func init() {
 	}
 	flag.Parse()
 
+	blacklist = strings.Split(bl, ",")
+
 	switch log_level := os.Getenv("LOG_LEVEL"); log_level {
-  case "DEBUG":
+	case "DEBUG":
 		log.SetLevel(log.DebugLevel)
-  case "WARN":
+	case "WARN":
 		log.SetLevel(log.WarnLevel)
-  case "ERROR":
+	case "ERROR":
 		log.SetLevel(log.ErrorLevel)
-  case "FATAL":
+	case "FATAL":
 		log.SetLevel(log.FatalLevel)
-  case "PANIC":
+	case "PANIC":
 		log.SetLevel(log.PanicLevel)
-  default:
+	default:
 		log.SetLevel(log.InfoLevel)
 	}
 
 	if bfpath, mbrf, err := loadbf(); err != nil {
-		brf = Burryfest{InfraService: isvc, Endpoint: endpoint, Timeout: timeout, StorageTarget: starget, Creds: parsecred()}
+		brf = Burryfest{InfraService: isvc, Endpoint: endpoint, Timeout: timeout, StorageTarget: starget, Creds: parsecred(), Polltime: polltime, Blacklist: blacklist}
 	} else {
 		brf = mbrf
 		log.WithFields(log.Fields{"func": "init"}).Info(fmt.Sprintf("Using burryfest %s", bfpath))
@@ -124,7 +137,9 @@ func init() {
 		}
 	}
 	numrestored = 0
+	checksum = []byte{0x00}
 }
+
 
 func processop() bool {
 	success := false
@@ -134,6 +149,9 @@ func processop() bool {
 		return false
 	}
 	switch bop {
+	case BURRY_OPERATION_CONTINUOUS:
+		continuous()
+		success = true
 	case BURRY_OPERATION_BACKUP:
 		switch brf.InfraService {
 		case INFRA_SERVICE_ZK:
@@ -178,7 +196,7 @@ func main() {
 		os.Exit(0)
 	}
 	log.WithFields(log.Fields{"func": "main"}).Info(fmt.Sprintf("Selected operation: %s", strings.ToUpper(bop)))
-	log.WithFields(log.Fields{"func": "main"}).Debug(fmt.Sprintf("My config: %+v", brf))
+	log.WithFields(log.Fields{"func": "main"}).Info(fmt.Sprintf("My config: %+v", brf))
 
 	if ok := processop(); ok {
 		if createburryfest {

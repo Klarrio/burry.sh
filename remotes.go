@@ -36,7 +36,13 @@ func toremoteS3(localarch string) {
 	if s3Config.Bucket == "" {
 		s3Config.Bucket = brf.InfraService + "-backup"
 	}
-	object := strings.TrimSuffix(f, filepath.Ext(f))
+
+	var object string
+	if s3Config.Object == "" {
+		object = strings.TrimSuffix(f, filepath.Ext(f))
+	} else {
+		object = s3Config.Object
+	}
 	if len(s3Config.Prefix) != 0 {
 		object = filepath.Join(s3Config.Prefix, object)
 	}

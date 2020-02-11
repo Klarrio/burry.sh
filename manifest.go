@@ -21,6 +21,8 @@ type Burryfest struct {
 	Timeout       int         `json:"timeout"`
 	StorageTarget string      `json:"target"`
 	Creds         Credentials `json:"credentials"`
+	Polltime      int         `json:"polltime"`
+	Blacklist     []string    `json:"blacklist"`
 }
 
 // Credentials defines the structure of the access
@@ -35,6 +37,13 @@ type Credentials struct {
 type CredParams struct {
 	Key   string `json:"key"`
 	Value string `json:"val"`
+}
+
+func (p CredParams) String() string {
+	if strings.Contains(strings.ToUpper(p.Key), "SECRET") {
+		return fmt.Sprintf("{Key:%s Value:*****}", p.Key)
+	}
+	return fmt.Sprintf("{Key:%s Value:%s}", p.Key, p.Value)
 }
 
 // ArchMeta defines the top-level structure for the
@@ -54,6 +63,7 @@ type S3Config struct {
 	SecretAccessKey string
 	Bucket          string
 	Prefix          string
+	Object          string
 	SSL             bool
 }
 
@@ -98,6 +108,9 @@ func extractS3config() (s3Config S3Config) {
 		}
 		if p.Key == "PREFIX" {
 			s3Config.Prefix = p.Value
+		}
+		if p.Key == "OBJECT" {
+			s3Config.Object = p.Value
 		}
 		if p.Key == "SSL" {
 			var err error
